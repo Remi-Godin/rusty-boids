@@ -52,4 +52,9 @@ impl Flock {
         }
         Flock { boids: flock }
     }
+    
+    fn calc_distance(&self, boid_1: &Boid, boid_2: &Boid) -> f32 {
+        abs(((boid_2.x - boid_1.x).powi(2) + (boid_2.y - boid_1.y).powi(2)).sqrt())
+    }
+
 }
