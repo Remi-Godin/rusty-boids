@@ -22,10 +22,7 @@ fn model(app: &App) -> Model {
 
 fn update(_app: &App, model: &mut Model, _update: Update) {
     // Here goes the code that I want to run every update cycle
-    for boid in model.flock.boids.iter_mut() {
-        boid.move_boid(0.01);
-    }
-
+    model.flock.start_flock();
 }
 
 fn view(app: &App, model: &Model, frame: Frame) {
@@ -35,8 +32,8 @@ fn view(app: &App, model: &Model, frame: Frame) {
     for boid in my_flock {
         draw.tri()
             .color(RED)
-            .w(5.0)
-            .h(5.0)
+            .w(BOID_SIZE)
+            .h(BOID_SIZE)
             .x_y(boid.x, boid.y)
             .z_radians(boid.r);
     }
