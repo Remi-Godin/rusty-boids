@@ -25,13 +25,11 @@ impl Boid {
     }
 
     fn rotate(&mut self, rads_target: f32) {
-        let mut new_r = self.r + (rads_target * BOID_ROT_SPEED);
-        if new_r >= 2.0 * PI {
-            new_r -= 2.0 * PI
-        } else if new_r < 0.0 {
-            new_r += 2.0 * PI
+        if rads_target - self.r > PI {
+            self.r += 2.0 * PI;
+        } else {
+            self.r += (rads_target - self.r)*BOID_ROT_SPEED;
         }
-        self.r = new_r;
     }
 
     fn translate(&mut self) {
