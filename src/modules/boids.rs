@@ -25,13 +25,10 @@ pub struct Flock {
 
 impl ForceVector {
     pub fn new(magnitude: f32, angle: f32) -> ForceVector {
-        ForceVector {
-            magnitude,
-            angle
-        }
+        ForceVector { magnitude, angle }
     }
 
-    pub fn zero() -> ForceVector {
+    pub fn zero() -> Self {
         ForceVector {
             magnitude: 0.0,
             angle: 0.0,
@@ -65,7 +62,7 @@ impl Boid {
         }
         if abs(adjustment) < BOID_ROT_THRESHOLD {
             self.angle = *target_angle;
-            return
+            return;
         }
         while self.angle > 2.0 * PI {
             self.angle -= 2.0 * PI;
@@ -92,25 +89,30 @@ impl Flock {
             boids,
             nearby: Vec::new(),
             cohesion: Vec::new(),
-            separation: Vec::new(), 
+            separation: Vec::new(),
             allignment: Vec::new(),
-            centers_of_flock: Vec::new()
+            centers_of_flock: Vec::new(),
         }
     }
 
     pub fn start_flock(&mut self) {
         self.nearby = generate_nearby_lists(&self);
         self.centers_of_flock = generate_center_of_flock_list(&self);
-        for i in self.boids.iter_mut() {
+        self.cohesion = calc_cohesion_forces(&self);
+        let forces = combine_force_vectors(&self);
+        for index in 0..self.boids.len() {
             // THE LITERAL ANGLE VALUE NEEDS TO BE CHANGED FOR A VAR THAT WILL
             // BE CALCULATED FROM THE COMBINATION OF ALL FORCES. IF ALL EXTERNAL
             // FORCES ADD UP TO A ZERO MAGNITUDE VECTOR, THEN THE BOID SHOULD JUST
-            // CONTINUE ON ITS WAY. 
+            // CONTINUE ON ITS WAY.
             //
             // I MIGHT NEED TO GET THE CURRENT BOID INSIDE THE FORCE CALCULATION
             // TO RETURN IT'S ANGLE AS A RESULT IN THE CASE OF ZERO MAGNITUDE VECTOR
             // ADDITION.
-            i.move_boid(&6.0);
+            self.boids
+                .get_mut(index)
+                .unwrap()
+                .move_boid(&forces.get(index).unwrap().angle);
         }
     }
 }
@@ -146,4 +148,59 @@ fn generate_center_of_flock_list(flock: &Flock) -> Vec<Vec2> {
         // MAGNITUDE VECTORS
     }
     list_of_vec2
+}
+
+fn calc_cohesion_forces(flock: &Flock) -> Vec<ForceVector> {
+    let mut force_list: Vec<ForceVector> = Vec::new();
+    for boid_index in 0..flock.boids.len() {
+        let boid = flock.boids.get(boid_index).unwrap();
+        let target = flock.centers_of_flock.get(boid_index).unwrap();
+        let force = ForceVector::new(
+            boid.coord.distance(*target),
+            get_angle_to_target(&boid.coord, target),
+        );
+        force_list.push(force);
+    }
+    force_list
+}
+
+fn combine_force_vectors(flock: &Flock) -> Vec<ForceVector> {
+    let mut force_list: Vec<ForceVector> = Vec::new();
+    println!("#########################");
+    for boid_index in 0..flock.boids.len() {
+        // Could not figure out how to get the force vectors out without using separate variable
+        // for the magnitude and angle. The unwrap was forcing a &ForceVector and it ws causing
+        // an issue where it said "Temporary value dropped while borrowed" or something like that.
+        //
+        // This function could very likely be refactored
+        //
+        let result = add_polar_vectors(flock.cohesion.get(boid_index).unwrap_or(&ForceVector::zero()), flock.allignment.get(boid_index).unwrap_or(&ForceVector::zero()));
+        let force_vector = ForceVector::new(1.0, result.angle);
+
+        println!("{}", force_vector.angle);
+        force_list.push(force_vector);
+    }
+    force_list
+}
+
+fn add_polar_vectors(v1: &ForceVector, v2: &ForceVector) -> ForceVector {
+    let magnitude = ((v1.magnitude.powi(2) + v2.magnitude.powi(2))
+        + (v1.magnitude * v2.magnitude) * (v2.angle - v1.angle).cos())
+    .sqrt();
+    let angle = v1.angle
+        + f32::atan2(
+            v2.magnitude * (v2.angle - v1.angle).sin(),
+            v1.magnitude + v2.magnitude * (v2.angle - v1.angle).cos(),
+        );
+    ForceVector::new(magnitude, angle)
+}
+
+pub fn get_angle_to_target(origin: &Vec2, target: &Vec2) -> f32 {
+    let delta_x = target.x - origin.x;
+    let delta_y = target.y - origin.y;
+    let mut angle = (delta_y).atan2(delta_x);
+    if angle < 0. {
+        angle += PI * 2.0;
+    }
+    angle
 }

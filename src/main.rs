@@ -1,9 +1,6 @@
 #![allow(unused)]
 mod modules;
-use modules::{
-    boids::{self, Boid, Flock},
-    config::*,
-};
+use modules::{boids::*, config::*};
 use nannou::prelude::*;
 
 struct Model {
@@ -42,7 +39,10 @@ fn draw_boid(draw: &Draw, boid: &Boid) {
     draw.arrow()
         .color(BLACK)
         .start(boid.coord)
-        .end(boid.coord + BOID_SIZE / 5.0 * Vec2::new(10.0 * boid.angle.cos(), 10.0 * boid.angle.sin()))
+        .end(
+            boid.coord
+                + BOID_SIZE / 5.0 * Vec2::new(10.0 * boid.angle.cos(), 10.0 * boid.angle.sin()),
+        )
         .head_width(BOID_SIZE / 3.0)
         .head_length(BOID_SIZE);
     draw.rect()
