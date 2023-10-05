@@ -1,5 +1,6 @@
 #![allow(unused)]
 mod modules;
+use std::env;
 use modules::{boids::*, config::*};
 use nannou::prelude::*;
 
@@ -9,6 +10,7 @@ struct Model {
 }
 
 fn main() {
+    env::set_var("RUST_BACKTRACE", "full");
     nannou::app(model).update(update).run();
 }
 
@@ -31,8 +33,8 @@ fn update(_app: &App, model: &mut Model, _update: Update) {
     model.flock.start_flock();
 }
 
-fn draw_boid(draw: &Draw, boid: &Boid) {
-    let text = format!("Angle: {:6.3}", boid.angle);
+fn draw_boid(draw: &Draw, boid: &Boid, index: &usize) {
+    let text = format!("ID: {}", index);
     draw.text(&text)
         .x_y(boid.coord.x + 45.0, boid.coord.y)
         .color(BLACK);
@@ -70,16 +72,29 @@ fn draw_cohesion_vectors(draw: &Draw, flock: &Flock) {
 
 fn draw_separation_vectors(flock: &Flock) {}
 
-fn draw_allignement_vectors(flock: &Flock) {}
+fn draw_allignement_vectors(draw: &Draw, flock: &Flock) {
+    for i in 0..flock.boids.len() {
+        let origin = flock.boids.get(i).unwrap();
+        let target = flock.allignment.get(i).unwrap();
+        let boid = flock.boids.get(i).unwrap();
+        draw.arrow().start(origin.coord).end(
+            boid.coord
+                + Vec2::new(
+                    target.magnitude * target.angle.cos(),
+                    target.magnitude * target.angle.sin(),
+                ),
+        ).color(BLUE);
+    }
+}
 
 fn view(app: &App, model: &Model, frame: Frame) {
     // Here goes the code for the rendering of things
-    let my_flock = model.flock.boids.iter();
     let draw = app.draw();
-    for boid in my_flock {
-        draw_boid(&draw, boid);
+    for boid_index in 0..model.flock.boids.len() {
+        draw_boid(&draw, model.flock.boids.get(boid_index).unwrap(), &boid_index);
     }
-    //draw_cohesion_vectors(&draw, &model.flock);
+    draw_cohesion_vectors(&draw, &model.flock);
+    draw_allignement_vectors(&draw, &model.flock);
     for com in model.flock.centers_of_flock.iter() {
         draw.rect().color(ORANGE).x_y(com.x, com.y).w(5.0).h(5.0);
     }
