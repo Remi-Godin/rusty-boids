@@ -1,8 +1,5 @@
-#![allow(unused)]
-#![allow(dead_code)]
 use super::config::*;
-use nannou::{prelude::*, draw::properties::SetDimensions};
-use rand::random;
+use nannou::prelude::*;
 
 #[derive(Clone, Debug)]
 pub struct ForceVector {
@@ -22,6 +19,7 @@ pub struct Flock {
     pub cohesion: Vec<ForceVector>,
     pub separation: Vec<ForceVector>,
     pub allignment: Vec<ForceVector>,
+    pub result_forces: Vec<ForceVector>
 }
 
 impl ForceVector {
@@ -98,7 +96,7 @@ impl Boid {
 impl Flock {
     pub fn new(amount: usize) -> Flock {
         let mut boids: Vec<Boid> = Vec::new();
-        for i in 0..amount {
+        for _i in 0..amount {
             boids.push(Boid::new());
         }
         Flock {
@@ -108,6 +106,7 @@ impl Flock {
             separation: Vec::new(),
             allignment: Vec::new(),
             centers_of_flock: Vec::new(),
+            result_forces: Vec::new()
         }
     }
 
@@ -116,20 +115,13 @@ impl Flock {
         self.centers_of_flock = generate_center_of_flock_list(&self);
         self.cohesion = calc_cohesion_forces(&self);
         self.allignment = calc_allignment_forces(&self);
-        let forces = combine_force_vectors(&self);
+        self.separation = calc_separation_forces(&self);
+        self.result_forces = combine_force_vectors(&self);
         for index in 0..self.boids.len() {
-            // THE LITERAL ANGLE VALUE NEEDS TO BE CHANGED FOR A VAR THAT WILL
-            // BE CALCULATED FROM THE COMBINATION OF ALL FORCES. IF ALL EXTERNAL
-            // FORCES ADD UP TO A ZERO MAGNITUDE VECTOR, THEN THE BOID SHOULD JUST
-            // CONTINUE ON ITS WAY.
-            //
-            // I MIGHT NEED TO GET THE CURRENT BOID INSIDE THE FORCE CALCULATION
-            // TO RETURN IT'S ANGLE AS A RESULT IN THE CASE OF ZERO MAGNITUDE VECTOR
-            // ADDITION.
             self.boids
                 .get_mut(index)
                 .unwrap()
-                .move_boid(&forces.get(index).unwrap());
+                .move_boid(&self.result_forces.get(index).unwrap());
         }
     }
 }
@@ -158,11 +150,6 @@ fn generate_center_of_flock_list(flock: &Flock) -> Vec<Vec2> {
             center_of_flock += flock.boids.get(*boid_index).unwrap().coord;
         }
         list_of_vec2.push(center_of_flock / (flock.nearby.get(list_index).unwrap().len() as f32));
-        // SEEMS TO BE WORKING
-        // NEED TO MAKE SURE THAT THE BOIDS CAN FLY ON THEIR OWN
-        // SO I NEED TO INTEGRATE THE COMBINE FORCES FUNCTION
-        // SOON SO THAT I CAN HAVE A DEFAULT VECTOR AND IGNORE ZERO
-        // MAGNITUDE VECTORS
     }
     list_of_vec2
 }
@@ -173,7 +160,7 @@ fn calc_cohesion_forces(flock: &Flock) -> Vec<ForceVector> {
         let boid = flock.boids.get(boid_index).unwrap();
         let target = flock.centers_of_flock.get(boid_index).unwrap();
         let mut force = ForceVector::new(
-            boid.coord.distance(*target) * BOID_COHESION_WEIGHT,
+            (boid.coord.distance(*target)/5.0).pow(2) * BOID_COHESION_WEIGHT,
             get_angle_to_target(&boid.coord, target),
         );
         if force.magnitude == 0. {
@@ -201,7 +188,7 @@ fn calc_allignment_forces(flock: &Flock) -> Vec<ForceVector> {
             if dist == 0.0 {
                 continue
             }
-            let weight = clamp((BOID_ALLIGNMENT_WEIGHT / dist) * BOID_NEARBY_DIST_THRESHOLD, 0.0, BOID_NEARBY_DIST_THRESHOLD);
+            let weight = clamp((BOID_ALLIGNMENT_WEIGHT / dist) * BOID_NEARBY_DIST_THRESHOLD * 10.0, 0.0, BOID_NEARBY_DIST_THRESHOLD);
             let force = ForceVector::new(weight, target_boid.angle);
             intermediate_force_list.push(force);
         }
@@ -215,16 +202,47 @@ fn calc_allignment_forces(flock: &Flock) -> Vec<ForceVector> {
     force_list
 }
 
+fn calc_separation_forces(flock: &Flock) -> Vec<ForceVector> {
+    let mut force_list: Vec<ForceVector> = Vec::new();
+    for boid_index in 0..flock.boids.len() {
+        let boid = flock.boids.get(boid_index).unwrap();
+        let nearby_group = flock.nearby.get(boid_index).unwrap();
+        if nearby_group.len() == 1 {
+            force_list.push(ForceVector::zero());
+            continue
+        }
+        let mut intermediate_force_list: Vec<ForceVector> = Vec::new();
+        for nearby_list_index in 0..nearby_group.len() {
+            let nearby = nearby_group.get(nearby_list_index).unwrap();
+            let target_boid = flock.boids.get(*nearby).unwrap();
+            let dist = boid.coord.distance(target_boid.coord);
+            if dist == 0.0 {
+                continue
+            }
+            let weight = clamp((BOID_SEPARATION_WEIGHT / dist) * BOID_SEPARATION_DIST_TARGET * 50.0 , 0.0, BOID_SEPARATION_DIST_TARGET);
+            let angle = (get_angle_to_target(&boid.coord, &target_boid.coord)) + PI;
+            let force = ForceVector::new(weight, angle);
+            intermediate_force_list.push(force);
+        }
+        let mut result_force: ForceVector = ForceVector::zero();
+        for i in 0..intermediate_force_list.len() {
+            let second_force_vector = intermediate_force_list.get(i).unwrap();
+            result_force = add_polar_vectors(&result_force, second_force_vector);
+        }
+        force_list.push(result_force);
+    }
+    force_list
+}
+
+
 fn combine_force_vectors(flock: &Flock) -> Vec<ForceVector> {
     let mut force_list: Vec<ForceVector> = Vec::new();
     for boid_index in 0..flock.boids.len() {
-        // Could not figure out how to get the force vectors out without using separate variable
-        // for the magnitude and angle. The unwrap was forcing a &ForceVector and it ws causing
-        // an issue where it said "Temporary value dropped while borrowed" or something like that.
-        //
-        // This function could very likely be refactored
-        //
-        let result = add_polar_vectors(flock.cohesion.get(boid_index).unwrap_or(&ForceVector::zero()), flock.allignment.get(boid_index).unwrap_or(&ForceVector::zero()));
+        let result = add_polar_vectors(
+            flock.cohesion.get(boid_index).unwrap_or(&ForceVector::zero()),
+            &add_polar_vectors(
+                flock.allignment.get(boid_index).unwrap_or(&ForceVector::zero()),
+                flock.separation.get(boid_index).unwrap_or(&ForceVector::zero())));
         let force_vector = ForceVector::new(result.magnitude, result.angle);
         force_list.push(force_vector);
     }

@@ -1,4 +1,3 @@
-#![allow(unused)]
 mod modules;
 use std::env;
 use modules::{boids::*, config::*};
@@ -29,15 +28,10 @@ fn model(app: &App) -> Model {
 }
 
 fn update(_app: &App, model: &mut Model, _update: Update) {
-    // Here goes the code that I want to run every update cycle
     model.flock.start_flock();
 }
 
-fn draw_boid(draw: &Draw, boid: &Boid, index: &usize) {
-    let text = format!("ID: {}", index);
-    draw.text(&text)
-        .x_y(boid.coord.x + 45.0, boid.coord.y)
-        .color(BLACK);
+fn draw_boid(draw: &Draw, boid: &Boid) {
     draw.arrow()
         .color(BLACK)
         .start(boid.coord)
@@ -66,11 +60,24 @@ fn draw_cohesion_vectors(draw: &Draw, flock: &Flock) {
                     target.magnitude * target.angle.cos(),
                     target.magnitude * target.angle.sin(),
                 ),
-        );
+        ).color(YELLOWGREEN);
     }
 }
 
-fn draw_separation_vectors(flock: &Flock) {}
+fn draw_separation_vectors(draw: &Draw, flock: &Flock) {
+    for i in 0..flock.boids.len() {
+        let origin = flock.boids.get(i).unwrap();
+        let target = flock.separation.get(i).unwrap();
+        let boid = flock.boids.get(i).unwrap();
+        draw.arrow().start(origin.coord).end(
+            boid.coord
+                + Vec2::new(
+                    target.magnitude * target.angle.cos(),
+                    target.magnitude * target.angle.sin(),
+                ),
+        ).color(GREEN);
+    }
+}
 
 fn draw_allignement_vectors(draw: &Draw, flock: &Flock) {
     for i in 0..flock.boids.len() {
@@ -87,18 +94,38 @@ fn draw_allignement_vectors(draw: &Draw, flock: &Flock) {
     }
 }
 
+fn draw_result_vectors(draw: &Draw, flock: &Flock) {
+    for i in 0..flock.boids.len() {
+        let origin = flock.boids.get(i).unwrap();
+        let target = flock.result_forces.get(i).unwrap();
+        let boid = flock.boids.get(i).unwrap();
+        draw.arrow().start(origin.coord).end(
+            boid.coord
+                + Vec2::new(
+                    target.magnitude * target.angle.cos(),
+                    target.magnitude * target.angle.sin(),
+                ),
+        ).color(ORANGE);
+    }
+}
+
+fn draw_center_of_groups(draw: &Draw, flock: &Flock) {
+    for i in 0..flock.centers_of_flock.len() {
+        let center = flock.centers_of_flock.get(i).unwrap();
+        draw.rect().color(ORANGE).x_y(center.x, center.y).w(5.0).h(5.0);
+    }
+}
+
 fn view(app: &App, model: &Model, frame: Frame) {
-    // Here goes the code for the rendering of things
     let draw = app.draw();
     for boid_index in 0..model.flock.boids.len() {
-        draw_boid(&draw, model.flock.boids.get(boid_index).unwrap(), &boid_index);
+        draw_boid(&draw, model.flock.boids.get(boid_index).unwrap());
     }
-    draw_cohesion_vectors(&draw, &model.flock);
-    draw_allignement_vectors(&draw, &model.flock);
-    for com in model.flock.centers_of_flock.iter() {
-        draw.rect().color(ORANGE).x_y(com.x, com.y).w(5.0).h(5.0);
-    }
-    draw.rect().color(BLUE).width(5.).height(5.).x_y(0., 0.);
+    if DISPLAY_COHESION_VECTORS {draw_cohesion_vectors(&draw, &model.flock);}
+    if DISPLAY_ALLIGNMENT_VECTORS {draw_allignement_vectors(&draw, &model.flock);}
+    if DISPLAY_SEPARATRION_VECTORS {draw_separation_vectors(&draw, &model.flock);}
+    if DISPLAY_FINAL_VECTORS {draw_result_vectors(&draw, &model.flock);}
+    if DISPLAY_CENTER_OF_GROUPS {draw_center_of_groups(&draw, &model.flock);}
     draw.background().color(DARKGRAY);
     draw.to_frame(app, &frame).unwrap();
 }
